@@ -3,14 +3,12 @@
 	<name>Java Large File Uploader Demo</name>
 	<modelVersion>4.0.0</modelVersion>
 
-	<parent>
-		<groupId>com.am</groupId>
-		<artifactId>java-large-file-uploader-parent</artifactId>
-		<version>1.1.8</version>
-	</parent>
-
+	<groupId>com.am</groupId>
 	<artifactId>java-large-file-uploader-jar</artifactId>
 	<packaging>jar</packaging>
+	<version>1.1.8</version>
+
+
 
 	<properties>
 		<spring.version>3.0.6.RELEASE</spring.version>

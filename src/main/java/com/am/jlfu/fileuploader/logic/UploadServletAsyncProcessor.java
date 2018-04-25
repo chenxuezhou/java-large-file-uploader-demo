@@ -39,371 +39,351 @@ import com.am.jlfu.staticstate.entities.StaticFileState;
 import com.am.jlfu.staticstate.entities.StaticStatePersistedOnFileSystemEntity;
 
 
-
 @Component
 @ManagedResource(objectName = "JavaLargeFileUploader:name=uploadServletAsyncProcessor")
 public class UploadServletAsyncProcessor {
 
-	/** The size of the buffer in bytes */
-	public static final int SIZE_OF_THE_BUFFER_IN_BYTES = 8192;// 8KB
+    /**
+     * The size of the buffer in bytes
+     */
+    public static final int SIZE_OF_THE_BUFFER_IN_BYTES = 8192;// 8KB
 
-	private static final Logger log = LoggerFactory.getLogger(UploadServletAsyncProcessor.class);
+    private static final Logger log = LoggerFactory.getLogger(UploadServletAsyncProcessor.class);
 
-	@Autowired
-	private RateLimiterConfigurationManager uploadProcessingConfigurationManager;
+    @Autowired
+    private RateLimiterConfigurationManager uploadProcessingConfigurationManager;
 
-	@Autowired
-	private StaticStateManager<StaticStatePersistedOnFileSystemEntity> staticStateManager;
+    @Autowired
+    private StaticStateManager<StaticStatePersistedOnFileSystemEntity> staticStateManager;
 
-	@Autowired
-	private UploadProcessingOperationManager uploadProcessingOperationManager;
+    @Autowired
+    private UploadProcessingOperationManager uploadProcessingOperationManager;
 
-	@Autowired
-	private StaticStateIdentifierManager staticStateIdentifierManager;
+    @Autowired
+    private StaticStateIdentifierManager staticStateIdentifierManager;
 
-	/** The executor that process the stream */
-	private ScheduledThreadPoolExecutor uploadWorkersPool = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(10);
+    /**
+     * The executor that process the stream
+     */
+    private ScheduledThreadPoolExecutor uploadWorkersPool = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(10);
 
-	@PreDestroy
-	private void destroy() throws InterruptedException {
-		log.debug("destroying executor");
-		uploadWorkersPool.shutdown();
-		if (!uploadWorkersPool.awaitTermination(1, TimeUnit.MINUTES)) {
-			log.error("executor timed out");
-			List<Runnable> shutdownNow = uploadWorkersPool.shutdownNow();
-			for (Runnable runnable : shutdownNow) {
-				log.error(runnable + "has not been terminated");
-			}
-		}
-	}
+    @PreDestroy
+    private void destroy() throws InterruptedException {
+        log.debug("destroying executor");
+        uploadWorkersPool.shutdown();
+        if (!uploadWorkersPool.awaitTermination(1, TimeUnit.MINUTES)) {
+            log.error("executor timed out");
+            List<Runnable> shutdownNow = uploadWorkersPool.shutdownNow();
+            for (Runnable runnable : shutdownNow) {
+                log.error(runnable + "has not been terminated");
+            }
+        }
+    }
 
-	
-	/** Specifies whether the uploads should be processed or not. */
-	private volatile boolean enabled = true;
 
-	public void process(StaticFileState fileState, UUID fileId, String crc, InputStream inputStream,
-			WriteChunkCompletionListener completionListener)
-			throws FileNotFoundException
-	{
-		
-		// get identifier
-		UUID clientId = staticStateIdentifierManager.getIdentifier();
+    /**
+     * Specifies whether the uploads should be processed or not.
+     */
+    private volatile boolean enabled = true;
 
-		// extract the corresponding request entity from map
-		final RequestUploadProcessingConfiguration requestUploadProcessingConfiguration =
-				uploadProcessingConfigurationManager.getUploadProcessingConfiguration(fileId);
+    public void process(StaticFileState fileState, UUID fileId, String crc, InputStream inputStream,
+                        WriteChunkCompletionListener completionListener)
+            throws FileNotFoundException {
 
-		// get static file state
-		File file = new File(fileState.getAbsoluteFullPathOfUploadedFile());
+        // get identifier
+        UUID clientId = staticStateIdentifierManager.getIdentifier();
 
-		// if there is no configuration in the map
-		if (requestUploadProcessingConfiguration.getRateInKiloBytes() == null) {
+        // extract the corresponding request entity from map
+        final RequestUploadProcessingConfiguration requestUploadProcessingConfiguration =
+                uploadProcessingConfigurationManager.getUploadProcessingConfiguration(fileId);
 
-			// and if there is a specific configuration in the file
-			FileStateJsonBase staticFileStateJson = fileState.getStaticFileStateJson();
-			if (staticFileStateJson != null && staticFileStateJson.getRateInKiloBytes() != null) {
+        // get static file state
+        File file = new File(fileState.getAbsoluteFullPathOfUploadedFile());
 
-				// use it
-				uploadProcessingConfigurationManager.assignRateToRequest(fileId, staticFileStateJson.getRateInKiloBytes());
+        // if there is no configuration in the map
+        if (requestUploadProcessingConfiguration.getRateInKiloBytes() == null) {
 
-			}
-		}
+            // and if there is a specific configuration in the file
+            FileStateJsonBase staticFileStateJson = fileState.getStaticFileStateJson();
+            if (staticFileStateJson != null && staticFileStateJson.getRateInKiloBytes() != null) {
 
+                // use it
+                uploadProcessingConfigurationManager.assignRateToRequest(fileId, staticFileStateJson.getRateInKiloBytes());
 
-		// if the file does not exist, there is an issue!
-		if (!file.exists()) {
-			throw new FileNotFoundException("File with id " + fileId + " not found");
-		}
+            }
+        }
+
+
+        // if the file does not exist, there is an issue!
+        if (!file.exists()) {
+            throw new FileNotFoundException("File with id " + fileId + " not found");
+        }
+
+        // initialize the streams
+        FileOutputStream outputStream = new FileOutputStream(file, true);
+
+        // get all the processing operation
+        uploadProcessingOperationManager.startOperation(clientId, fileId);
+        final UploadProcessingOperation masterProcessingOperation = uploadProcessingOperationManager.getMasterProcessingOperation();
+        final UploadProcessingOperation clientProcessingOperation = uploadProcessingOperationManager.getClientProcessingOperation(clientId);
+        final UploadProcessingOperation requestProcessingOperation = uploadProcessingOperationManager.getFileProcessingOperation(fileId);
 
-		// initialize the streams
-		FileOutputStream outputStream = new FileOutputStream(file, true);
+
+        // init the task
+        final WriteChunkToFileTask task =
+                new WriteChunkToFileTask(fileId, requestProcessingOperation, clientProcessingOperation, requestUploadProcessingConfiguration,
+                        masterProcessingOperation, crc, inputStream,
+                        outputStream, completionListener, clientId);
+
+        // mark the file as processing
+        requestUploadProcessingConfiguration.setProcessing(true);
+
+        // then submit the task to the workers pool
+        uploadWorkersPool.submit(task);
+
+    }
+
+
+    public interface WriteChunkCompletionListener {
+
+        public void error(Exception exception);
+
+
+        public void success();
+    }
+
+    public class WriteChunkToFileTask
+            implements Callable<Void> {
+
+
+        private final InputStream inputStream;
+        private final FileOutputStream outputStream;
+        private final UUID fileId;
+        private final UUID clientId;
+        private final String crc;
+
+        private final WriteChunkCompletionListener completionListener;
+
+        private UploadProcessingOperation requestUploadProcessingOperation;
+        private UploadProcessingOperation clientUploadProcessingOperation;
+        private UploadProcessingOperation masterUploadProcessingOperation;
+        private RequestUploadProcessingConfiguration requestUploadProcessingConfiguration;
+
+        private CRC32 crc32 = new CRC32();
+        /**
+         * 当前读取的字节位置
+         */
+        private long byteProcessed;
+        /**
+         * 写入次数
+         */
+        private long completionTimeTakenReference;
+
+
+        public WriteChunkToFileTask(UUID fileId, UploadProcessingOperation requestOperation,
+                                    UploadProcessingOperation clientOperation, RequestUploadProcessingConfiguration requestUploadProcessingConfiguration, UploadProcessingOperation masterProcessingOperation,
+                                    String crc,
+                                    InputStream inputStream,
+                                    FileOutputStream outputStream, WriteChunkCompletionListener completionListener, UUID clientId) {
+            this.fileId = fileId;
+            this.requestUploadProcessingConfiguration = requestUploadProcessingConfiguration;
+            this.requestUploadProcessingOperation = requestOperation;
+            this.clientUploadProcessingOperation = clientOperation;
+            this.masterUploadProcessingOperation = masterProcessingOperation;
+            this.crc = crc;
+            this.inputStream = inputStream;
+            this.outputStream = outputStream;
+            this.completionListener = completionListener;
+            this.clientId = clientId;
+        }
+
+
+        @Override
+        public Void call()
+                throws Exception {
+            try {
+                // 如果我们没有超过我们的字节写余量
+                long requestAllowance, clientAllowance, masterAllowance;
+                if ((requestAllowance = requestUploadProcessingOperation.getDownloadAllowanceForIteration()) > 0 &&
+                        (clientAllowance = clientUploadProcessingOperation.getDownloadAllowanceForIteration()) > 0 &&
+                        (masterAllowance = masterUploadProcessingOperation.getDownloadAllowanceForIteration()) > 0) {
+
+                    // keep first time
+                    if (completionTimeTakenReference == 0) {
+                        completionTimeTakenReference = new Date().getTime();
+                        log.trace("first write " + completionTimeTakenReference);
+                    }
+
+                    // process
+                    write(minOf(
+                            (int) requestAllowance,
+                            (int) clientAllowance,
+                            (int) masterAllowance));
+                }
+                // if have exceeded it
+                else {
+
+                    // 默认情况下，等待默认值200
+                    long delay = RateLimiter.BUCKET_FILLED_EVERY_X_MILLISECONDS;
+
+
+                    // if we have a first write time
+                    if (completionTimeTakenReference != 0) {
+
+                        // calculate the delay which is basically the iteration time minus the time
+                        // it took to use our allowance in this iteration, so that we go directly to
+                        // the next iteration
+                        final long time = new Date().getTime();
+                        final long lastWriteWasAgo = time - completionTimeTakenReference;
+                        //修改延迟时间
+                        delay = RateLimiter.BUCKET_FILLED_EVERY_X_MILLISECONDS - lastWriteWasAgo;
+                        log.trace("waiting for allowance, fillbucket is expected in " + delay + "(last write was " + lastWriteWasAgo + " ago (" +
+                                time +
+                                " - " + completionTimeTakenReference + "))");
+                        completionTimeTakenReference = 0;
+                    }
+
+                    // resubmit it
+                    uploadWorkersPool.schedule(this, delay, TimeUnit.MILLISECONDS);
+                }
+            } catch (Exception e) {
+                // forward exception
+                completeWithError(e);
+            }
+            return null;
+        }
+
+
+        private void write(int available)
+                throws IOException, FileCorruptedException, UploadIsCurrentlyDisabled {
+
+            //check if uploading is enabled or not
+            if (!enabled) {
+                throw new UploadIsCurrentlyDisabled();
+            }
+
+            //最大读取10M内容
+            byte[] buffer = new byte[Math.min(available, SIZE_OF_THE_BUFFER_IN_BYTES)];
+
+            //判断是否停止
+            int bytesCount;
+            synchronized (requestUploadProcessingConfiguration) {
+                if (requestUploadProcessingConfiguration.isPaused()) {
+                    log.debug("User cancellation detected.");
+                    // 关闭输出流，并调用成功的接口
+                    success();
+                    return;
+                }
+                bytesCount = inputStream.read(buffer);
+            }
+            // if we have something
+            if (bytesCount != -1) {
+                // process the write for one token
+                log.trace("已读取的字节位置{}，请求的filedId{}", (byteProcessed += bytesCount), fileId);
+                //输出文件流，整个完成关闭其内容
+                outputStream.write(buffer, 0, bytesCount);
+                // and update crc32
+                crc32.update(buffer, 0, bytesCount);
+                //已完成的至减统计
+                requestUploadProcessingOperation.bytesConsumedFromAllowance(bytesCount);
+                clientUploadProcessingOperation.bytesConsumedFromAllowance(bytesCount);
+                masterUploadProcessingOperation.bytesConsumedFromAllowance(bytesCount);
+
+                uploadWorkersPool.submit(this);
+            } else {
+                String calculatedChecksum = Long.toHexString(crc32.getValue());
+                log.debug("文件ID " + fileId + " 写入临时文件，检验写入的crc " + calculatedChecksum +
+                        "反输入" + crc);
+                if (!calculatedChecksum.equals(crc)) {
+                    completeWithError(new InvalidCrcException(calculatedChecksum, crc));
+                    return;
+                }
+                staticStateManager.setCrcBytesValidated(clientId, fileId, byteProcessed);
+                success();
+            }
+        }
+
+
+        public void completeWithError(Exception e) {
+            log.debug("error for " + fileId + ". closing file stream");
+            closeFileStream();
+            completionListener.error(e);
+        }
+
+
+        public void success() {
+            log.debug("completion for " + fileId + ". closing file stream");
+            closeFileStream();
+            completionListener.success();
+        }
+
+
+        private void closeFileStream() {
+            log.debug("Closing FileOutputStream of " + fileId);
+            try {
+                outputStream.close();
+            } catch (Exception e) {
+                log.error("Error closing file output stream for id " + fileId + ": " + e.getMessage());
+            }
+        }
+
+
+    }
+
+
+    @ManagedAttribute
+    public int getAwaitingChunks() {
+        return uploadWorkersPool.getQueue().size();
+    }
+
+
+    public void clean(UUID clientId, UUID fileId) {
+        log.debug("resetting token bucket for " + fileId);
+
+        // deleting operation
+        uploadProcessingOperationManager.stopOperation(clientId, fileId);
+
+        // resetting configuration
+        uploadProcessingConfigurationManager.reset(fileId);
+
+    }
+
+
+    public static int minOf(int... numbers) {
+        int min = -1;
+        if (numbers.length > 0) {
+            min = numbers[0];
+            for (int i = 1; i < numbers.length; i++) {
+                min = Math.min(min, numbers[i]);
+            }
+        }
+        return min;
+    }
+
+
+    /**
+     * Checks if the file is paused.
+     *
+     * @param fileId
+     * @return
+     */
+    public boolean isFilePaused(UUID fileId) {
+        final RequestUploadProcessingConfiguration requestUploadProcessingConfiguration =
+                uploadProcessingConfigurationManager.getUploadProcessingConfiguration(fileId);
+        synchronized (requestUploadProcessingConfiguration) {
+            return requestUploadProcessingConfiguration.isPaused();
+        }
+    }
+
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+
+    public boolean isEnabled() {
+        return enabled;
+    }
 
-		// get all the processing operation
-		uploadProcessingOperationManager.startOperation(clientId, fileId);
-		final UploadProcessingOperation masterProcessingOperation = uploadProcessingOperationManager.getMasterProcessingOperation();
-		final UploadProcessingOperation clientProcessingOperation = uploadProcessingOperationManager.getClientProcessingOperation(clientId);
-		final UploadProcessingOperation requestProcessingOperation = uploadProcessingOperationManager.getFileProcessingOperation(fileId);
 
-
-		// init the task
-		final WriteChunkToFileTask task =
-				new WriteChunkToFileTask(fileId, requestProcessingOperation, clientProcessingOperation, requestUploadProcessingConfiguration,
-						masterProcessingOperation, crc, inputStream,
-						outputStream, completionListener, clientId);
-
-		// mark the file as processing
-		requestUploadProcessingConfiguration.setProcessing(true);
-
-		// then submit the task to the workers pool
-		uploadWorkersPool.submit(task);
-
-	}
-
-
-
-	public interface WriteChunkCompletionListener {
-
-		public void error(Exception exception);
-
-
-		public void success();
-	}
-
-	public class WriteChunkToFileTask
-			implements Callable<Void> {
-
-
-		private final InputStream inputStream;
-		private final FileOutputStream outputStream;
-		private final UUID fileId;
-		private final UUID clientId;
-		private final String crc;
-
-		private final WriteChunkCompletionListener completionListener;
-
-		private UploadProcessingOperation requestUploadProcessingOperation;
-		private UploadProcessingOperation clientUploadProcessingOperation;
-		private UploadProcessingOperation masterUploadProcessingOperation;
-		private RequestUploadProcessingConfiguration requestUploadProcessingConfiguration;
-
-		private CRC32 crc32 = new CRC32();
-		private long byteProcessed;
-		private long completionTimeTakenReference;
-
-
-
-		public WriteChunkToFileTask(UUID fileId, UploadProcessingOperation requestOperation,
-				UploadProcessingOperation clientOperation, RequestUploadProcessingConfiguration requestUploadProcessingConfiguration, UploadProcessingOperation masterProcessingOperation,
-				String crc,
-				InputStream inputStream,
-				FileOutputStream outputStream, WriteChunkCompletionListener completionListener, UUID clientId) {
-			this.fileId = fileId;
-			this.requestUploadProcessingConfiguration=requestUploadProcessingConfiguration;
-			this.requestUploadProcessingOperation = requestOperation;
-			this.clientUploadProcessingOperation = clientOperation;
-			this.masterUploadProcessingOperation = masterProcessingOperation;
-			this.crc = crc;
-			this.inputStream = inputStream;
-			this.outputStream = outputStream;
-			this.completionListener = completionListener;
-			this.clientId = clientId;
-		}
-
-
-		@Override
-		public Void call()
-				throws Exception {
-			try {
-				// if we have not exceeded our byte to write allowance
-				long requestAllowance, clientAllowance, masterAllowance;
-				if ((requestAllowance = requestUploadProcessingOperation.getDownloadAllowanceForIteration()) > 0 &&
-						(clientAllowance = clientUploadProcessingOperation.getDownloadAllowanceForIteration()) > 0 &&
-						(masterAllowance = masterUploadProcessingOperation.getDownloadAllowanceForIteration()) > 0) {
-
-					// keep first time
-					if (completionTimeTakenReference == 0) {
-						completionTimeTakenReference = new Date().getTime();
-						log.trace("first write " + completionTimeTakenReference);
-					}
-
-					// process
-					write(minOf(
-							(int) requestAllowance,
-							(int) clientAllowance,
-							(int) masterAllowance));
-				}
-				// if have exceeded it
-				else {
-
-					// by default, wait for default value
-					long delay = RateLimiter.BUCKET_FILLED_EVERY_X_MILLISECONDS;
-
-
-					// if we have a first write time
-					if (completionTimeTakenReference != 0) {
-
-						// calculate the delay which is basically the iteration time minus the time
-						// it took to use our allowance in this iteration, so that we go directly to
-						// the next iteration
-						final long time = new Date().getTime();
-						final long lastWriteWasAgo = time - completionTimeTakenReference;
-						delay = RateLimiter.BUCKET_FILLED_EVERY_X_MILLISECONDS - lastWriteWasAgo;
-						log.trace("waiting for allowance, fillbucket is expected in " + delay + "(last write was " + lastWriteWasAgo + " ago (" +
-								time +
-								" - " + completionTimeTakenReference + "))");
-						completionTimeTakenReference = 0;
-					}
-
-					// resubmit it
-					uploadWorkersPool.schedule(this, delay, TimeUnit.MILLISECONDS);
-				}
-			}
-			catch (Exception e) {
-				// forward exception
-				completeWithError(e);
-			}
-			return null;
-		}
-
-
-		private void write(int available)
-				throws IOException, FileCorruptedException, UploadIsCurrentlyDisabled {
-
-			//check if uploading is enabled or not
-			if (!enabled) {
-				throw new UploadIsCurrentlyDisabled();
-			}
-			
-			// init the buffer with the size of what we read
-			byte[] buffer = new byte[Math.min(available, SIZE_OF_THE_BUFFER_IN_BYTES)];
-
-			//synchronizing on file here so that pause can be assigned before actually starting to read the file
-			int bytesCount;
-			synchronized (requestUploadProcessingConfiguration) {
-
-				// check if user wants to cancel
-				//firefox is waiting too long for socket timeout so we provocate a stream closure here..
-				if (requestUploadProcessingConfiguration.isPaused()) {
-					log.debug("User cancellation detected.");
-					success();
-					return;
-				}
-				
-				//read
-				bytesCount = inputStream.read(buffer);
-			}
-
-
-			// if we have something
-			if (bytesCount != -1) {
-
-				// process the write for one token
-				log.trace("Processed bytes {} of request ({})", (byteProcessed += bytesCount), fileId);
-
-				// write it to file
-				outputStream.write(buffer, 0, bytesCount);
-
-				// and update crc32
-				crc32.update(buffer, 0, bytesCount);
-
-				// and update request allowance
-				requestUploadProcessingOperation.bytesConsumedFromAllowance(bytesCount);
-
-				// and update client allowance
-				clientUploadProcessingOperation.bytesConsumedFromAllowance(bytesCount);
-
-				// also update master allowance
-				masterUploadProcessingOperation.bytesConsumedFromAllowance(bytesCount);
-
-				// submit again
-				uploadWorkersPool.submit(this);
-			}
-			//
-			// if we are done
-			else {
-				String calculatedChecksum = Long.toHexString(crc32.getValue());
-				log.debug("Processed part for file " + fileId + " into temp file, checking written crc " + calculatedChecksum +
-						" against input crc " + crc);
-
-				// compare the checksum of the chunks
-				if (!calculatedChecksum.equals(crc)) {
-					completeWithError(new InvalidCrcException(calculatedChecksum, crc));
-					return;
-				}
-
-				// if the crc is valid, specify the validation to the state
-				staticStateManager.setCrcBytesValidated(clientId, fileId, byteProcessed);
-
-				// and specify as complete
-				success();
-			}
-		}
-
-
-		public void completeWithError(Exception e) {
-			log.debug("error for " + fileId + ". closing file stream");
-			closeFileStream();
-			completionListener.error(e);
-		}
-
-
-		public void success() {
-			log.debug("completion for " + fileId + ". closing file stream");
-			closeFileStream();
-			completionListener.success();
-		}
-
-
-		private void closeFileStream() {
-			log.debug("Closing FileOutputStream of " + fileId);
-			try {
-				outputStream.close();
-			}
-			catch (Exception e) {
-				log.error("Error closing file output stream for id " + fileId + ": " + e.getMessage());
-			}
-		}
-
-
-	}
-
-
-
-	@ManagedAttribute
-	public int getAwaitingChunks() {
-		return uploadWorkersPool.getQueue().size();
-	}
-
-
-	public void clean(UUID clientId, UUID fileId) {
-		log.debug("resetting token bucket for " + fileId);
-
-		// deleting operation
-		uploadProcessingOperationManager.stopOperation(clientId, fileId);
-
-		// resetting configuration
-		uploadProcessingConfigurationManager.reset(fileId);
-
-	}
-
-
-
-	public static int minOf(int... numbers) {
-		int min = -1;
-		if (numbers.length > 0) {
-			min = numbers[0];
-			for (int i = 1; i < numbers.length; i++) {
-				min = Math.min(min, numbers[i]);
-			}
-		}
-		return min;
-	}
-
-	
-	/**
-	 * Checks if the file is paused.
-	 * @param fileId
-	 * @return 
-	 */
-	public boolean isFilePaused(UUID fileId) {
-		final RequestUploadProcessingConfiguration requestUploadProcessingConfiguration =
-				uploadProcessingConfigurationManager.getUploadProcessingConfiguration(fileId);
-		synchronized (requestUploadProcessingConfiguration) {
-			return requestUploadProcessingConfiguration.isPaused();
-		}
-	}
-
-
-	
-	public void setEnabled(boolean enabled) {
-		this.enabled = enabled;
-	}
-
-
-	
-	public boolean isEnabled() {
-		return enabled;
-	}
-	
-	
 }

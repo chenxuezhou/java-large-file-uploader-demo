@@ -2,6 +2,7 @@
     <head>
         <title>Java Large File Uploader Demo</title>
         <link href="//apps.bdimg.com/libs/jqueryui/1.10.4/css/jquery-ui.min.css" rel="stylesheet" type="text/css" />
+        <meta http-equiv="Content-Type" content="text/html; charset=gbk" />
         <script src="http://cdn.static.runoob.com/libs/jquery/1.10.2/jquery.min.js"></script>
         <script src="//apps.bdimg.com/libs/jqueryui/1.10.4/jquery-ui.min.js"></script>
         <script src="./js/javalargefileuploader.js"></script>
@@ -89,7 +90,7 @@
                     //process the file upload
                     jlfu.fileUploadProcess(e.target,
 
-                    //define a start callback to create the UI that will interact with the file upload
+                    //进度调显示当前文件上传情况
                     function (pendingFile, origin) {
                         appendUploadControls(pendingFile.id);
                     },
@@ -102,7 +103,7 @@
                         });
                     },
 
-                    //define a finishCallback showing the completion in the em element 
+                    //文件上传完毕显示，并删除操作按钮
                     function (pendingFile, origin) {
                         document.getElementById(pendingFile.id).children[0].textContent = "Upload of " + pendingFile.originalFileName + " (" + pendingFile.originalFileSize + ") completed.";
                         deleteElementsButEmAndCancel(pendingFile.id);

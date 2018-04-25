@@ -5,6 +5,7 @@ function JavaLargeFileUploader() {
 	var globalServletMapping = "javaLargeFileUploaderServlet";
 	var uploadServletMapping = "javaLargeFileUploaderAsyncServlet";
 	var pendingFiles = new Object();
+	//分片大小，默认设定了10M，1024*1024*1024
 	var bytesPerChunk;
 
 	javaLargeFileUploaderHost = "";
@@ -286,16 +287,26 @@ function JavaLargeFileUploader() {
 			});
 		}
 	}
-	
+
+    /**
+	 * 
+     * @param referenceToFileElement  事件源
+     * @param startCallback
+     * @param progressCallback
+     * @param finishCallback
+     * @param exceptionCallback
+     */
 	this.fileUploadProcess = function (referenceToFileElement, startCallback, progressCallback,
 			finishCallback, exceptionCallback) {
 
 		//read the file information from input
 		var allFiles = extractFilesInformation(referenceToFileElement, startCallback, progressCallback,
 				finishCallback, exceptionCallback);
-		//copy it to another array which is gonna contain the new files to process
+		console.log(allFiles)
+		//将它复制到另一个数组，其中包含要处理的新文件。
 		var potentialNewFiles = allFiles.slice(0);
 
+		console.log(potentialNewFiles)
 		//try to corrolate information with our pending files
 		//corrolate with filename  size and crc of first chunk
 		//start resuming if we have a match
@@ -305,7 +316,7 @@ function JavaLargeFileUploader() {
 		for (fileKey in allFiles) {
 			var pendingFile = allFiles[fileKey];
 				
-			//look for a match in the pending files
+			//pendingFiles只是全局对象
 			for (pendingFileToCheckKey in pendingFiles) {
 				var pendingFileToCheck = pendingFiles[pendingFileToCheckKey];
 				
@@ -493,31 +504,34 @@ function JavaLargeFileUploader() {
 
 			//extract first chunk crc
 			pendingFile.blob.i = fileForPost.tempId;
+			//利用reader.readAsBinaryString
 			extractCrcFirstSlice(pendingFile.blob, function(crc, blob) {
+				//json新文件
 				jsonVersionOfNewFiles[blob.i].crc = crc;
+				//等待文件
 				pendingFiles[blob.i].firstChunkCrc=crc;
+				// crc 个数计算
 				crcsCalculated++;
 				if (crcsCalculated == jsonVersionOfNewFiles.length) {
-					$.getJSON(javaLargeFileUploaderHost + globalServletMapping + "?action=prepareUpload", {newFiles: JSON.stringify(jsonVersionOfNewFiles)}, function(data) {
-						
+					$.getJSON("javaLargeFileUploaderServlet" + "?action=prepareUpload", {newFiles: JSON.stringify(jsonVersionOfNewFiles)}, function(data) {
 						//now populate our local entries with ids
 						$.each(data , function(tempIdI, fileIdI) {
-							
 							//now that we have the file id, we can assign the object
 							fileId = fileIdI;
 							pendingFile = pendingFiles[tempIdI];
 							pendingFile.id = fileId;
 							pendingFile.fileComplete = false;
+							//准备之时设定为0
 							pendingFile.fileCompletionInBytes = 0;
 							pendingFiles[fileId] = pendingFile;
 							delete pendingFiles[tempIdI];
-							
 							//call callback
 							if (pendingFile.startCallback) {
 								pendingFile.startCallback(pendingFile, pendingFile.referenceToFileElement);
 							}
 							
-							// and process the upload
+							// 文件上传
+                            console.log("文件上传结构pendingFile="+pendingFile)
 							fileUploadProcessStarter(pendingFile);
 						});
 					});
@@ -599,10 +613,10 @@ function JavaLargeFileUploader() {
 		//we can process only if we are under the capacity
 		return numberOfUploadsCurrentlyBeingProcessed < maxNumberOfConcurrentUploads;
 	}
-	
+
 	function fileUploadProcessStarter(pendingFile) {
 		
-		//if the file is not complete
+		//pendingFile.originalFileSizeInBytes上传文件总大小
 		if (pendingFile.fileCompletionInBytes < pendingFile.originalFileSizeInBytes) {
 
 			//reset some tags
@@ -666,36 +680,38 @@ function JavaLargeFileUploader() {
 		//append chunk to a formdata
 		var formData = new FormData();
 		formData.append("file", chunk);
-	
+		// console
 		// prepare the checksum of the slice
 		var reader = new FileReader();
 		reader.onloadend = function(e) {
 		    if (e.target.readyState == FileReader.DONE) { // DONE == 2
 				//calculate crc of the chunk read
+                console.log("文件流事件e "+e)
 		        var digest = crc32(e.target.result);
-		
 				// prepare xhr request
 				var xhr = new XMLHttpRequest();
 				pendingFile.xhr = xhr;
-				
 				//assign pause callback
 				xhr.addEventListener("abort", function(event) {
 					notifyPause(pendingFile);
 				}, false);
-				
+                var synURL='javaLargeFileUploaderAsyncServlet' + '?action=upload&fileId=' + pendingFile.id + '&crc=' + decimalToHexString(digest);
+                console.log(synURL);
 				//then open
-				xhr.open('POST', javaLargeFileUploaderHost + uploadServletMapping + '?action=upload&fileId=' + pendingFile.id + '&crc=' + decimalToHexString(digest), true);
-		
+				xhr.open('POST',  synURL, true);
 				// assign callback
 				xhr.onreadystatechange = function() {
+                    /*0：请求未初始化，还没有调用 open()。
+					1：请求已经建立，但是还没有发送，还没有调用 send()。
+					2：请求已发送，正在处理中（通常现在可以从响应中获取内容头）。
+					3：请求在处理中；通常响应中已有部分数据可用了，没有全部完成。
+					4：响应已完成；您可以获取并使用服务器的响应了。*/
 					if (xhr.readyState == 4) {
-		
 						//if we are pausing or cancelling, we just return
 						if (pendingFile.pausing || pendingFile.cancelled) {
 							return;
 						}
-						
-						//if we have an exception in the call
+						//和readyState不一样
 						if (xhr.status != 200) {
 							displayException(pendingFile, 8);
 							if (autoRetry) {
@@ -705,10 +721,10 @@ function JavaLargeFileUploader() {
 							uploadEnd(pendingFile, true);
 							return;
 						}
-						
 						//if we have an exception in the response text
 						if (xhr.response) {
 							var resp = JSON.parse(xhr.response);
+							console.log(resp)
 							displayException(pendingFile, resp.value);
 							if (autoRetry && isExceptionRetryable(resp.value)) {
 								//submit retry
@@ -717,12 +733,11 @@ function JavaLargeFileUploader() {
 							uploadEnd(pendingFile, true);
 							return;
 						}
-		
 						// progress
 						pendingFile.fileCompletionInBytes = pendingFile.end;
 						pendingFile.end = pendingFile.fileCompletionInBytes + bytesPerChunk;
-		
 						// check if we need to go on
+                        console.log("pendingFile=  "+pendingFile)
 						if (pendingFile.fileCompletionInBytes < pendingFile.originalFileSizeInBytes) {
 							// recursive call
 							setTimeout(go, 5, pendingFile);
@@ -736,7 +751,6 @@ function JavaLargeFileUploader() {
 						}
 					}
 				};
-		
 				// send xhr request
 				try {
 					//only send if it is pending, because it could have been asked for cancellation while we were reading the file!
@@ -758,10 +772,8 @@ function JavaLargeFileUploader() {
 		    }
 			
 		};
-		//read the chunk to calculate the crc
+		//读取分片
 		reader.readAsBinaryString(chunk);
-
-	
 	}
 	
 	function uploadEnd(pendingFile, withException) {
@@ -950,12 +962,12 @@ function JavaLargeFileUploader() {
             }
             return crc ^ (-1);
     }
-	
+
 	function decimalToHexString(number) {
 	    if (number < 0) {
 	        number = 0xFFFFFFFF + number + 1;
 	    }
-	
+
 	    return number.toString(16).toLowerCase();
 	}
 }

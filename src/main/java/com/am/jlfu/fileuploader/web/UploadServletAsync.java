@@ -122,6 +122,7 @@ public class UploadServletAsync extends HttpRequestHandlerServlet
 
 						@Override
 						public void success() {
+							//异步结束方式
 							asyncContext.complete();
 						}
 

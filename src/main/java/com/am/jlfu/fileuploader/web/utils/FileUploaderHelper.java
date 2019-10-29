@@ -24,7 +24,7 @@ import com.google.gson.Gson;
 
 
 /**
- * Provides some common methods to deal with file upload requests.
+ * 文件上传控制情况
  * 
  * @author antoinem
  * 

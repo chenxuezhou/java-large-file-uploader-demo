@@ -41,22 +41,21 @@ public class UploadServletAsync extends HttpRequestHandlerServlet
 	private static final Logger log = LoggerFactory.getLogger(UploadServletAsync.class);
 
 	@Autowired
-	ExceptionCodeMappingHelper exceptionCodeMappingHelper;
-
-	@Autowired
 	UploadServletAsyncProcessor uploadServletAsyncProcessor;
 	
 	@Autowired
 	StaticStateIdentifierManager staticStateIdentifierManager;
 
+	/**
+	 * 根据文件fieldId得到当前文件状态
+	 */
 	@Autowired
 	StaticStateManager<StaticStatePersistedOnFileSystemEntity> staticStateManager;
 
 	@Autowired
 	FileUploaderHelper fileUploaderHelper;
 
-	@Autowired
-	Authorizer authorizer;
+
 
 	/**
 	 * Maximum time that a streaming request can take.<br>
@@ -83,7 +82,7 @@ public class UploadServletAsync extends HttpRequestHandlerServlet
 
 			// verify authorization
 			final UUID clientId = staticStateIdentifierManager.getIdentifier();
-			authorizer.getAuthorization(request, UploadServletAction.upload, clientId, process.getFileId());
+
 
 			//check if that file is not paused
 			if (uploadServletAsyncProcessor.isFilePaused(process.getFileId())) {
@@ -141,11 +140,11 @@ public class UploadServletAsync extends HttpRequestHandlerServlet
 									// do nothing
 								}
 								else {
-									exceptionCodeMappingHelper.processException(exception, response);
+									//删除异常简单代码
 								}
 							}
 							else {
-								exceptionCodeMappingHelper.processException(exception, response);
+								//删除异常简单代码
 							}
 
 							asyncContext.complete();
@@ -154,7 +153,6 @@ public class UploadServletAsync extends HttpRequestHandlerServlet
 					});
 		}
 		catch (Exception e) {
-			exceptionCodeMappingHelper.processException(e, response);
 		}
 
 	}

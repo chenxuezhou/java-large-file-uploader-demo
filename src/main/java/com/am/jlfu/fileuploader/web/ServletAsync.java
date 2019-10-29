@@ -33,8 +33,8 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 
-@Component("javaLargeFileUploaderAsyncServlet")
-@WebServlet(name = "javaLargeFileUploaderAsyncServlet", urlPatterns = { "/javaLargeFileUploaderAsyncServlet" }, asyncSupported = true)
+@Component("testAsyncServlet")
+@WebServlet(name = "javaLargeFileUploaderAsyncServlet", urlPatterns = { "/testAsyncServlet" }, asyncSupported = true)
 public class ServletAsync extends HttpRequestHandlerServlet
 		implements HttpRequestHandler {
 

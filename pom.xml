@@ -3,10 +3,15 @@
 	<name>Java Large File Uploader Demo</name>
 	<modelVersion>4.0.0</modelVersion>
 
+
 	<groupId>com.am</groupId>
-	<artifactId>java-large-file-uploader-jar</artifactId>
+	<artifactId>java-large-file-uploader-parent</artifactId>
 	<packaging>war</packaging>
 	<version>1.1.8</version>
+
+
+
+
 
 
 
@@ -37,11 +42,7 @@
 			<version>${spring.version}</version>
 		</dependency>
 
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-test</artifactId>
-            <version>${spring.version}</version>
-        </dependency>
+
 
         <dependency>
             <groupId>javax.servlet</groupId>
@@ -139,6 +140,7 @@
 			<version>3.3</version>
 		</dependency>
 	</dependencies>
+
 
 
     <build>

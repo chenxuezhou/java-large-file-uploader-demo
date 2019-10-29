@@ -10,7 +10,9 @@ import com.am.jlfu.fileuploader.web.utils.RequestComponentContainer;
 import com.am.jlfu.identifier.IdentifierProvider;
 
 
-
+/**
+ * 管理客服端的情况
+ */
 @Component
 public class StaticStateIdentifierManager {
 

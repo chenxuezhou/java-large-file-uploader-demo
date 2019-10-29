@@ -1,0 +1,20 @@
+html, body{
+    height: 100%;
+}
+
+#file {
+    display: none;
+}
+
+.row {
+    margin: 0;
+}
+
+.uploaded {
+    margin: auto auto;
+}
+
+.uploading {
+    display: none;
+    margin: auto 0;
+}

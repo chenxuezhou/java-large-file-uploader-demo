@@ -1,0 +1,32 @@
+<html>
+    <head>
+        <title>Java Large File Uploader Demo</title>
+        <link href="http://apps.bdimg.com/libs/jqueryui/1.10.4/css/jquery-ui.min.css" rel="stylesheet" type="text/css" />
+        <meta http-equiv="Content-Type" content="text/html; charset=gbk" />
+        <script src="https://cdn.bootcss.com/jquery/1.10.2/jquery.min.js"></script>
+        <script src="http://apps.bdimg.com/libs/jqueryui/1.10.4/jquery-ui.min.js"></script>
+        <link rel="stylesheet" href="css/font-awesome.min.css">
+        <link rel="stylesheet" href="css/bootstrap.min.css">
+        <link rel="stylesheet" href="css/toastr.min.css">
+        <link rel="stylesheet" href="css/upload.css">
+    </head>
+    
+    <body>
+        <input type="file" id="file" onchange="init()">
+        <div style="height:45%"></div>
+        <div class="row" style="height:10%">
+            <button class="btn btn-primary col-md-2 offset-md-5 uploaded" onclick="selectFile()">选择文件</button>
+            <!-- 点击选择文件按钮后隐藏uploaded，显示uploading -->
+            <span id="fileName" class="col-md-3 text-center uploading">文件名</span>
+            <div class="progress col-md-6 uploading">
+                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"></div>
+            </div>
+            <span id="fileSize" class="col-md-2 text-center uploading">大小</span>
+            <button class="close col-md-1 uploading" onclick="closeProgressBar()">&times;</button>
+        </div>
+        <div style="height:45%"></div>
+        <script src="js/toastr.min.js"></script>
+        <script src="js/upload.js"></script>
+    </body>
+
+</html>

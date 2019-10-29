@@ -174,7 +174,15 @@
                     <scanIntervalSeconds>10</scanIntervalSeconds>
                     <stopKey>foo</stopKey>
                     <stopPort>9999</stopPort>
+					<!--<requestLog>-->
+						<!---->
+					<!--</requestLog>-->
+
+					<!--<webApp>-->
+
+					<!--</webApp>-->
                 </configuration>
+
             </plugin>
         </plugins>
     </build>

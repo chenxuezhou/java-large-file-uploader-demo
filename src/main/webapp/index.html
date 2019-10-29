@@ -13,7 +13,8 @@
                 jlfu = new JavaLargeFileUploader();
 
                 // 文件的初始化
-                jlfu.initialize(function (pendingFiles) {
+                jlfu.initialize(
+                    function (pendingFiles) {
 
                     //iterate over all the pending files
                     for (key in pendingFiles) {
@@ -22,10 +23,11 @@
                         //create a control element for each of them
                         appendUploadControls(pendingFile.id);
 
-                        //if the file is complete
+                        //文件完全上传完成
                         if (pendingFile.fileComplete) {
                             //specify it in the em element
-                            document.getElementById(pendingFile.id).children[0].textContent = "The file '" + pendingFile.originalFileName + "' has been fully uploaded (" + pendingFile.fileCompletion + "/" + pendingFile.originalFileSize + ").";
+                            document.getElementById(pendingFile.id).children[0].textContent = "文件名：'" + pendingFile.originalFileName + "' 已经完全上传 (" + pendingFile.fileCompletion + "/" + pendingFile.originalFileSize + ").";
+                            //Cancel控件
                             deleteElementsButEmAndCancel(pendingFile.id);
                         }
                         //else if incomplete and pending 
@@ -48,7 +50,8 @@
 
                     }
 
-                }, function (message) {
+                },
+                    function (message) {
                     alert(message);
                 });
 

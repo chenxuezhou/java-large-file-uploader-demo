@@ -5,16 +5,16 @@ function JavaLargeFileUploader() {
 	var globalServletMapping = "javaLargeFileUploaderServlet";
 	var uploadServletMapping = "javaLargeFileUploaderAsyncServlet";
 	var pendingFiles = new Object();
-	//åˆ†ç‰‡å¤§å°ï¼Œé»˜è®¤è®¾å®šäº†10Mï¼Œ1024*1024*1024
+	//·ÖÆ¬´óĞ¡£¬Ä¬ÈÏÉè¶¨ÁË10M£¬1024*1024*1024
 	var bytesPerChunk;
 
-	javaLargeFileUploaderHost = "";
-	progressPollerRefreshRate = 1000;
-	maxNumberOfConcurrentUploads = 5; 
-	autoRetry = true; 
-	autoRetryDelay = 5000; 
+	javaLargeFileUploaderHost = "http://localhost:8080/";
+	progressPollerRefreshRate = 1000;//½ø¶ÈË¢ĞÂÊ±¼ä
+	maxNumberOfConcurrentUploads = 5; //ÏòºóÌ¨·¢Æğ×î¶àÉÏ´«¸öÊı
+	autoRetry = true; //ÊÇ·ñÖØÊÔ
+	autoRetryDelay = 5000; //Ã¿´ÎÖØÊÔ¸ô¼¸Ãë
 	errorMessages = new Object();
-	errorMessages[0] = "Request failed for an unknown reason, please contact an administrator if the problem persists.";
+	errorMessages[0] = "ÇëÇóÊ§°ÜÎ´Öª´íÎó£¬ÇëÁªÏµ¹ÜÀíÔ±";
 	errorMessages[1] = "The request is not multipart.";
 	errorMessages[2] = "No file to upload found in the request.";
 	errorMessages[3] = "CRC32 Validation of the part failed.";
@@ -31,7 +31,8 @@ function JavaLargeFileUploader() {
 	errorMessages[14] = "File corrupted. An unknown error has occured and the file is corrupted. The usual cause is that the file has been modified during the upload. Please clear it and re-upload it.";
 	errorMessages[15] = "File is currently locked, retrying in a moment...";
 	errorMessages[16] = "Uploads are momentarily disabled, retrying in a moment...";
-	exceptionsRetryable = [0,3,7,8,10,11,15,16];
+
+	exceptionsRetryable = [0,3,7,8,10,11,15,16];//Òì³£ÖØÊÔ±í
 	
 	this.setJavaLargeFileUploaderHost = function (javaLargeFileUploaderHostI) {
 		javaLargeFileUploaderHost = javaLargeFileUploaderHostI;
@@ -290,7 +291,7 @@ function JavaLargeFileUploader() {
 
     /**
 	 * 
-     * @param referenceToFileElement  äº‹ä»¶æº
+     * @param referenceToFileElement  ÊÂ¼şÔ´[ËùÓĞÉÏ´«ÎÄ¼ş]
      * @param startCallback
      * @param progressCallback
      * @param finishCallback
@@ -303,27 +304,28 @@ function JavaLargeFileUploader() {
 		var allFiles = extractFilesInformation(referenceToFileElement, startCallback, progressCallback,
 				finishCallback, exceptionCallback);
 		console.log(allFiles)
-		//å°†å®ƒå¤åˆ¶åˆ°å¦ä¸€ä¸ªæ•°ç»„ï¼Œå…¶ä¸­åŒ…å«è¦å¤„ç†çš„æ–°æ–‡ä»¶ã€‚
+		//È¡µÚÒ»¸ö
 		var potentialNewFiles = allFiles.slice(0);
 
-		console.log(potentialNewFiles)
+
 		//try to corrolate information with our pending files
 		//corrolate with filename  size and crc of first chunk
 		//start resuming if we have a match
 		//if we dont have any name/size math, we process an upload 
 		var potentialResumeCounter = new Object();
 		potentialResumeCounter.counter = 0;
+		//±È½ÏºÍÒÑÓĞµÄ
 		for (fileKey in allFiles) {
 			var pendingFile = allFiles[fileKey];
 				
-			//pendingFilesåªæ˜¯å…¨å±€å¯¹è±¡
+			//pendingFilesÈ«¾Ö¶ÔÏó£¬´æ×Åµ±Ç°±»ÉÏ´«µÄÎÄ¼ş£¬[¸Õ¿ªÊ¼ÊÇ¿ÕµÄ]
 			for (pendingFileToCheckKey in pendingFiles) {
 				var pendingFileToCheck = pendingFiles[pendingFileToCheckKey];
-				
+				//ÔÙÉÏ´«µÄÎÄ¼şºÍÒÑÓĞÎÄ¼şÏàÍ¬
 				if (pendingFileToCheck.originalFileName == pendingFile.originalFileName && 
 						pendingFileToCheck.originalFileSizeInBytes == pendingFile.originalFileSizeInBytes) {
 					
-					//we might have a match, adding a match counter entry
+					//ÖØÊÔ¼ÆÊıÆ÷
 					potentialResumeCounter.counter++;
 					
 					//check the crc first slice 
@@ -333,7 +335,7 @@ function JavaLargeFileUploader() {
 			}
 		}
 		
-		//process if no pending to resume
+		//¿ªÊ¼ÉÏ´«ËùÓĞÎÄ¼ş
 		if (potentialResumeCounter.counter === 0 && potentialNewFiles.length > 0) {
 			processNewFiles(potentialNewFiles);
 		}
@@ -380,10 +382,10 @@ function JavaLargeFileUploader() {
 		        	//remove it from new file ids (as we are now sure it is not a new file)
 		        	potentialNewFiles.splice(potentialNewFiles.indexOf(pendingFile), 1);
 					
-		        	//if that file is not already being uploaded:
+		        	//Î´¿ªÊ¼
 		        	if (!pendingFileToCheck.started) {
 
-		        		//if that file is paused 
+		        		//ÎÄ¼şÊÇ·ñ±»ÔİÍ£»òÔİÍ£ÖĞ
 		        		if (isFilePaused(pendingFileToCheck)) {
 		        		
 		        			//resume it
@@ -402,7 +404,7 @@ function JavaLargeFileUploader() {
 		        			//put it into the pending files array
 		        			pendingFiles[pendingFileToCheck.id] = pendingFile;
 		        			
-		        			// process the upload
+		        			// ¿ªÊ¼¼ÌĞøÉÏ´«
 		        			fileResumeProcessStarter(pendingFile);
 		        		}
 					}
@@ -504,16 +506,16 @@ function JavaLargeFileUploader() {
 
 			//extract first chunk crc
 			pendingFile.blob.i = fileForPost.tempId;
-			//åˆ©ç”¨reader.readAsBinaryString
+			//ÀûÓÃreader.readAsBinaryString
 			extractCrcFirstSlice(pendingFile.blob, function(crc, blob) {
-				//jsonæ–°æ–‡ä»¶
+				//jsonĞÂÎÄ¼ş
 				jsonVersionOfNewFiles[blob.i].crc = crc;
-				//ç­‰å¾…æ–‡ä»¶
+				//µÈ´ıÎÄ¼ş
 				pendingFiles[blob.i].firstChunkCrc=crc;
-				// crc ä¸ªæ•°è®¡ç®—
+				// crc ¸öÊı¼ÆËã
 				crcsCalculated++;
 				if (crcsCalculated == jsonVersionOfNewFiles.length) {
-					$.getJSON("javaLargeFileUploaderServlet" + "?action=prepareUpload", {newFiles: JSON.stringify(jsonVersionOfNewFiles)}, function(data) {
+					$.getJSON(javaLargeFileUploaderHost+"javaLargeFileUploaderServlet" + "?action=prepareUpload", {newFiles: JSON.stringify(jsonVersionOfNewFiles)}, function(data) {
 						//now populate our local entries with ids
 						$.each(data , function(tempIdI, fileIdI) {
 							//now that we have the file id, we can assign the object
@@ -521,17 +523,17 @@ function JavaLargeFileUploader() {
 							pendingFile = pendingFiles[tempIdI];
 							pendingFile.id = fileId;
 							pendingFile.fileComplete = false;
-							//å‡†å¤‡ä¹‹æ—¶è®¾å®šä¸º0
+							//×¼±¸Ö®Ê±Éè¶¨Îª0
 							pendingFile.fileCompletionInBytes = 0;
 							pendingFiles[fileId] = pendingFile;
 							delete pendingFiles[tempIdI];
-							//call callback
+							//¿ªÊ¼ÉÏ´«»Øµ÷
 							if (pendingFile.startCallback) {
 								pendingFile.startCallback(pendingFile, pendingFile.referenceToFileElement);
 							}
 							
-							// æ–‡ä»¶ä¸Šä¼ 
-                            console.log("æ–‡ä»¶ä¸Šä¼ ç»“æ„pendingFile="+pendingFile)
+							// ÎÄ¼şÉÏ´«
+                            console.log("ÎÄ¼şÉÏ´«½á¹¹pendingFile="+pendingFile)
 							fileUploadProcessStarter(pendingFile);
 						});
 					});
@@ -563,7 +565,7 @@ function JavaLargeFileUploader() {
 					//calculate crc of the chunk read
 			        var digest = crc32(e.target.result);
 
-			        //and send it
+			        //ÖØĞÂÉÏ´«crcĞ£Ñé
 					$.get(javaLargeFileUploaderHost + globalServletMapping + "?action=verifyCrcOfUncheckedPart&fileId=" + pendingFile.id + "&crc=" + decimalToHexString(digest),	function(data) {
 						//check if we have an exception
 						if (data.value) {
@@ -616,7 +618,7 @@ function JavaLargeFileUploader() {
 
 	function fileUploadProcessStarter(pendingFile) {
 		
-		//pendingFile.originalFileSizeInBytesä¸Šä¼ æ–‡ä»¶æ€»å¤§å°
+		//pendingFile.originalFileSizeInBytesÉÏ´«ÎÄ¼ş×Ü´óĞ¡
 		if (pendingFile.fileCompletionInBytes < pendingFile.originalFileSizeInBytes) {
 
 			//reset some tags
@@ -626,16 +628,14 @@ function JavaLargeFileUploader() {
 			
 			//check if we can process the upload
 			if (canUploadBeProcessed() === true) {
-				
-				
+
 				// start
 				pendingFile.end = pendingFile.fileCompletionInBytes + bytesPerChunk;
 				pendingFile.started = true;
 				pendingFile.queued = false;
-				
 				console.log("processing "+pendingFile.id+" for slice "+pendingFile.fileCompletionInBytes + " - "+pendingFile.end);
 
-				// then process the recursive function
+				// ´¦ÀíÉÏ´«ÎÄ¼ş
 				go(pendingFile);
 
 			} else {
@@ -674,44 +674,42 @@ function JavaLargeFileUploader() {
 		//every time a chunk is being uplodaed, we check for firebug !
 		manageFirebug(pendingFile.exceptionCallback);
 	
-		//if file id is in the pending files:
+		//ÎÄ¼şÇĞÆ¬
 		var chunk = slice(pendingFile.blob, pendingFile.fileCompletionInBytes, pendingFile.end);
 	
-		//append chunk to a formdata
+		//Ê¹ÓÃformData
 		var formData = new FormData();
 		formData.append("file", chunk);
-		// console
-		// prepare the checksum of the slice
 		var reader = new FileReader();
 		reader.onloadend = function(e) {
 		    if (e.target.readyState == FileReader.DONE) { // DONE == 2
 				//calculate crc of the chunk read
-                console.log("æ–‡ä»¶æµäº‹ä»¶e "+e)
+                console.log("ÎÄ¼şÁ÷ÊÂ¼şe "+e)
 		        var digest = crc32(e.target.result);
 				// prepare xhr request
 				var xhr = new XMLHttpRequest();
 				pendingFile.xhr = xhr;
-				//assign pause callback
+				//¼ÓÈë±»´ò¶ÏÔİÍ£Í¨Öª
 				xhr.addEventListener("abort", function(event) {
 					notifyPause(pendingFile);
 				}, false);
-                var synURL='javaLargeFileUploaderAsyncServlet' + '?action=upload&fileId=' + pendingFile.id + '&crc=' + decimalToHexString(digest);
+                var synURL=javaLargeFileUploaderHost+'javaLargeFileUploaderAsyncServlet' + '?action=upload&fileId=' + pendingFile.id + '&crc=' + decimalToHexString(digest);
                 console.log(synURL);
 				//then open
 				xhr.open('POST',  synURL, true);
-				// assign callback
+				// ÉèÖÃ»Øµ÷
 				xhr.onreadystatechange = function() {
-                    /*0ï¼šè¯·æ±‚æœªåˆå§‹åŒ–ï¼Œè¿˜æ²¡æœ‰è°ƒç”¨ open()ã€‚
-					1ï¼šè¯·æ±‚å·²ç»å»ºç«‹ï¼Œä½†æ˜¯è¿˜æ²¡æœ‰å‘é€ï¼Œè¿˜æ²¡æœ‰è°ƒç”¨ send()ã€‚
-					2ï¼šè¯·æ±‚å·²å‘é€ï¼Œæ­£åœ¨å¤„ç†ä¸­ï¼ˆé€šå¸¸ç°åœ¨å¯ä»¥ä»å“åº”ä¸­è·å–å†…å®¹å¤´ï¼‰ã€‚
-					3ï¼šè¯·æ±‚åœ¨å¤„ç†ä¸­ï¼›é€šå¸¸å“åº”ä¸­å·²æœ‰éƒ¨åˆ†æ•°æ®å¯ç”¨äº†ï¼Œæ²¡æœ‰å…¨éƒ¨å®Œæˆã€‚
-					4ï¼šå“åº”å·²å®Œæˆï¼›æ‚¨å¯ä»¥è·å–å¹¶ä½¿ç”¨æœåŠ¡å™¨çš„å“åº”äº†ã€‚*/
+                    /*0£ºÇëÇóÎ´³õÊ¼»¯£¬»¹Ã»ÓĞµ÷ÓÃ open()¡£
+					1£ºÇëÇóÒÑ¾­½¨Á¢£¬µ«ÊÇ»¹Ã»ÓĞ·¢ËÍ£¬»¹Ã»ÓĞµ÷ÓÃ send()¡£
+					2£ºÇëÇóÒÑ·¢ËÍ£¬ÕıÔÚ´¦ÀíÖĞ£¨Í¨³£ÏÖÔÚ¿ÉÒÔ´ÓÏìÓ¦ÖĞ»ñÈ¡ÄÚÈİÍ·£©¡£
+					3£ºÇëÇóÔÚ´¦ÀíÖĞ£»Í¨³£ÏìÓ¦ÖĞÒÑÓĞ²¿·ÖÊı¾İ¿ÉÓÃÁË£¬Ã»ÓĞÈ«²¿Íê³É¡£
+					4£ºÏìÓ¦ÒÑÍê³É£»Äú¿ÉÒÔ»ñÈ¡²¢Ê¹ÓÃ·şÎñÆ÷µÄÏìÓ¦ÁË¡£*/
 					if (xhr.readyState == 4) {
 						//if we are pausing or cancelling, we just return
 						if (pendingFile.pausing || pendingFile.cancelled) {
 							return;
 						}
-						//å’ŒreadyStateä¸ä¸€æ ·
+						//ºÍreadyState²»Ò»Ñù£¬ÏìÓ¦Òì³£
 						if (xhr.status != 200) {
 							displayException(pendingFile, 8);
 							if (autoRetry) {
@@ -721,7 +719,7 @@ function JavaLargeFileUploader() {
 							uploadEnd(pendingFile, true);
 							return;
 						}
-						//if we have an exception in the response text
+						//response²»Îª¿ÕÓĞÒì³£
 						if (xhr.response) {
 							var resp = JSON.parse(xhr.response);
 							console.log(resp)
@@ -733,13 +731,12 @@ function JavaLargeFileUploader() {
 							uploadEnd(pendingFile, true);
 							return;
 						}
-						// progress
+						// °´ÕÕbytesPerChunkÒ»¿éÒ»¿éµÄÉÏ´«£¬Í¨¹ı¶¨Ê±Æ÷
 						pendingFile.fileCompletionInBytes = pendingFile.end;
 						pendingFile.end = pendingFile.fileCompletionInBytes + bytesPerChunk;
-						// check if we need to go on
-                        console.log("pendingFile=  "+pendingFile)
+						// ÒÑÍê³ÉĞ¡ÓÚÔ­Ê¼´óĞ¡
 						if (pendingFile.fileCompletionInBytes < pendingFile.originalFileSizeInBytes) {
-							// recursive call
+							// 5ºÁÃë¶¨Ê±
 							setTimeout(go, 5, pendingFile);
 						} else {
 							pendingFile.fileComplete=true;
@@ -751,11 +748,11 @@ function JavaLargeFileUploader() {
 						}
 					}
 				};
-				// send xhr request
+				// ·¢ËÍajaxÇëÇó
 				try {
 					//only send if it is pending, because it could have been asked for cancellation while we were reading the file!
 					if (pendingFiles[pendingFile.id]) {
-						//and if we are not pausing or cancelling
+						//ÈôÃ»ÓĞÍ£Ö¹»òÕßÈ¡Ïû
 						if (!isFilePaused(pendingFile) && !pendingFile.cancelled) {
 							xhr.send(formData);
 						}
@@ -772,7 +769,7 @@ function JavaLargeFileUploader() {
 		    }
 			
 		};
-		//è¯»å–åˆ†ç‰‡
+		//¶ÁÈ¡·ÖÆ¬
 		reader.readAsBinaryString(chunk);
 	}
 	
@@ -867,7 +864,7 @@ function JavaLargeFileUploader() {
 			}
 		}		
 	}
-	
+	//¿ªÊ¼½ø¶ÈÌõ
 	function startProgressPoller() {
 		
 		//first fill the request array

@@ -93,14 +93,13 @@
                     //process the file upload
                     jlfu.fileUploadProcess(e.target,
 
-                    //开始上传回调，并展示对应进度条，暂停，灰度等按钮情况，加入按钮对应监听事件
+                    //进度调显示当前文件上传情况
                     function (pendingFile, origin) {
                         appendUploadControls(pendingFile.id);
                     },
 
-                    //为进度条下面显示【完成百分比，上传速度，剩余】指标情况回调
+                    //define a progressCallback to show the progress in the em elements 
                     function (pendingFile, percentageCompleted, uploadRate, estimatedRemainingTime, origin) {
-                        //每个id为块
                         document.getElementById(pendingFile.id).children[0].textContent = "Uploading " + pendingFile.originalFileName + " ... (" + percentageCompleted + "% complete) at " + uploadRate + " per second. " + estimatedRemainingTime + " remaining.";
                         $("#" + pendingFile.id).children(".progressbar").progressbar({
                             value: Math.floor(percentageCompleted)
@@ -113,7 +112,7 @@
                         deleteElementsButEmAndCancel(pendingFile.id);
                     },
 
-                    //异常回调
+                    //define an exception callback
                     function (message, origin, pendingFile /* pending file object that can be null! if null, it is a general error */ ) {
                         if (pendingFile) {
                             document.getElementById(pendingFile.id).children[0].textContent = message;
@@ -136,36 +135,36 @@
                 div.append(document.createElement('hr'));
             }
 
-            //追加上传控制块
             function appendUploadControls(fileId) {
 
                 //get the ui container
                 var uiContainer = document.getElementById('uiContainer');
 
-                //div，以后端生产的uuid
+                //append a div
                 var div = document.createElement("div");
                 div.setAttribute('id', fileId);
                 uiContainer.appendChild(div);
 
-                //创建控制块
+                ////
+                //create the controls
 
-                //进度条
+                //progress bar
                 var progressBar = document.createElement("div");
                 progressBar.setAttribute("class", "progressbar");
                 progressBar.setAttribute("style", "height:20px;");
 
-                // 速率大小输入
+                // rate input
                 var rateInput = document.createElement("input");
                 rateInput.type = "text";
 
-                // 速率设置按钮
+                // rate button
                 var rateButton = document.createElement("button");
                 rateButton.addEventListener("click", function (e) {
                     jlfu.setRateInKiloBytes(getFileId(this), this.parentElement.children[2].value);
                 });
                 rateButton.appendChild(document.createTextNode('Apply'));
 
-                // 取消链接
+                // cancel link
                 var cancel = document.createElement("A");
                 cancel.setAttribute("href", "javascript:void(0);");
                 cancel.setAttribute("class", "cancel");
@@ -178,7 +177,7 @@
                 });
                 cancel.appendChild(document.createTextNode('Cancel'));
 
-                // 暂停链接
+                // pause link
                 var pause = document.createElement("A");
                 pause.setAttribute("href", "javascript:void(0);");
                 pause.addEventListener("click", function (e) {
@@ -189,7 +188,7 @@
                 });
                 pause.appendChild(document.createTextNode('Pause'));
 
-                // 继续上传传链接
+                // resume link
                 var resume = document.createElement("A");
                 resume.setAttribute("href", "javascript:void(0);");
                 resume.addEventListener("click", function (e) {
